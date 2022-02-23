@@ -1,0 +1,144 @@
+import os
+from PIL import Image
+import csv
+import cv2     # for capturing videos
+import math   # for mathematical operations
+import matplotlib.pyplot as plt    # for plotting the images
+%matplotlib inline
+import pandas as pd
+from keras.preprocessing import image   # for preprocessing the images
+import numpy as np    # for mathematical operations
+from keras.utils import np_utils
+from skimage.transform import resize   # for resizing images
+from sklearn.model_selection import train_test_split
+from glob import glob
+from tqdm import tqdm
+
+import pandas as pd
+# reading two csv files
+data1 = pd.read_csv('F:/SLT/data/features.csv')
+data2 = pd.read_csv('F:/SLT/data/DAiSEE/DAiSEE/Labels/TrainLabels.csv')
+
+print(data1)
+
+#mearge two csv files
+
+
+data2['ClipID'] = data2.ClipID.str.replace('.avi','').astype(float)
+
+ds = pd.merge(data1, data2, 
+                   on='ClipID', 
+                  how='left')
+  
+
+print(ds)
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import keras
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM,Dense ,Dropout
+
+#drop the columns
+ds = ds.drop(['image name','Boredom','Confusion','Frustration '],axis=1)
+ds.shape
+ds.head()
+print("\n\n")
+print(ds.info)
+
+#Scale data as X and Y
+training_set_y = pd.get_dummies(ds.Engagement)
+training_set_y = np.array(training_set_y)
+training_set_x = ds.drop('Engagement', axis=1)
+training_set_x=training_set_x.reset_index(drop=True)
+print("\n\n")
+print(training_set_y.shape)
+
+#Feature Scaling 
+sc = MinMaxScaler()
+training_set_x = sc.fit_transform(training_set_x)
+print("\n\n")
+print(training_set_x.shape)
+
+#shuffle the training_set_y and training_set_x
+indices = np.arange(training_set_x.shape[0])
+np.random.shuffle(indices)
+training_set_x = training_set_x[indices]
+training_set_y = training_set_y[indices] 
+
+#split x and y into training, testing data
+VALIDATION_SPLIT = 0.2
+x_train = []
+x_test = []
+y_train = []
+y_test = []
+
+num_validation_samples = int(VALIDATION_SPLIT*training_set_x.shape[0]) 
+x_train = training_set_x[: -num_validation_samples]
+y_train = training_set_y[: -num_validation_samples]
+x_test = training_set_x[-num_validation_samples: ]
+y_test = training_set_y[-num_validation_samples: ]
+
+print("\n\n")
+print("Number of entries in each category:")
+print("training: ", x_train.shape)
+print("testing: ", x_test.shape) 
+
+x_train , y_train = np.array(x_train), np.array(y_train)
+x_train = np.reshape(x_train, (x_train.shape[0] , x_train.shape[1], 1) )
+
+x_test, y_test = np.array(x_test), np.array(y_test)
+x_test = np.reshape(x_test, (x_test.shape[0] , x_test.shape[1], 1) )
+
+from keras.models import Sequential
+from keras.layers import LSTM,Dense ,Dropout
+
+model = Sequential()
+model.add(LSTM(units=100, return_sequences=True, input_shape = (x_train.shape[1],1) ) )
+model.add(Dropout(0.4))
+model.add(LSTM(units= 100 , return_sequences=True))
+model.add(Dropout(0.4))
+model.add(LSTM(units= 100 , return_sequences=True))
+model.add(Dropout(0.4))
+model.add(LSTM(units= 100))
+model.add(Dropout(0.4))
+model.add(Dense(units = y_train.shape[1],activation='sigmoid'))
+
+model.compile(optimizer='adam', loss='mean_squared_error',metrics=['acc'])
+
+print("Training Progress")
+history = model.fit(x_train, y_train, epochs=10, batch_size=10,validation_data=(x_test,y_test))
+
+eval_model = model.evaluate(x_train, y_train)
+eval_model
+
+eval_model = model.evaluate(x_test, y_test)
+eval_model
+
+model.summary()
+
+import matplotlib.pyplot as plt
+
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+epoches = range(1, len(loss)+1)
+plt.plot(epoches, loss, label='Training Loss')
+plt.plot(epoches, val_loss, label='Validation loss')
+plt.title('Training and Validation loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.show();
+
+accuracy = history.history['acc']
+val_accuracy = history.history['val_acc']
+plt.plot(epoches, accuracy, label='Training accuracy')
+plt.plot(epoches, val_accuracy, label='Validation accuracy')
+plt.title('Training and validation accuracy')
+plt.ylabel('Accuracy')
+plt.xlabel('Epochs')
+plt.legend()
+plt.show();
+
