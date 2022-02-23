@@ -1,0 +1,236 @@
+import os
+from PIL import Image
+import csv
+import cv2     # for capturing videos
+import math   # for mathematical operations
+import matplotlib.pyplot as plt    # for plotting the images
+%matplotlib inline
+import pandas as pd
+from keras.preprocessing import image   # for preprocessing the images
+import numpy as np    # for mathematical operations
+from keras.utils import np_utils
+from skimage.transform import resize   # for resizing images
+from sklearn.model_selection import train_test_split
+from glob import glob
+from tqdm import tqdm
+
+# open the .txt file which have names of training videos
+f = open("F:/SLT/data/DAiSEE/DAiSEE/DataSet/Train.txt", "r")
+temp = f.read()
+videos = temp.split('\n')
+
+# creating a dataframe having video names
+train = pd.DataFrame()
+train['video_name'] = videos
+train = train[:-1]
+train.head()
+
+# open the .txt file which have names of test videos
+f = open("F:/SLT/data/DAiSEE/DAiSEE/DataSet/Test.txt", "r")
+temp = f.read()
+videos = temp.split('\n')
+
+# creating a dataframe having video names
+test = pd.DataFrame()
+test['video_name'] = videos
+test = test[:-1]
+test.head()
+
+def create_dir(path):
+    try:
+        if not os.path.exists(path):
+            os.makedirs(path)
+    except OSError:
+        print(f"Error: creating directory with name {path}")
+
+def save_frame(video_path, save_dir, gap = 10):
+    name = video_path.split("/")[-1].split(".")[0]
+    save_path = os.path.join(save_dir,name)
+    create_dir(save_path)
+    
+    cap = cv2.VideoCapture(video_path)
+    idx = 0
+    
+    while True:
+        ret, frame = cap.read()
+        
+        if ret == False:
+            cap.release()
+            break
+            
+        if idx == 0:
+            cv2.imwrite(f"{save_path}/{idx}.png",frame)
+        else:
+            if idx % gap == 0:
+                cv2.imwrite(f"{save_path}/{idx}.png",frame)
+        
+        
+        
+        idx += 1
+
+if __name__ == "__main__":
+    video_paths = glob("F:/SLT/data/DAiSEE/DAiSEE/DataSet/Train/*/*/*")
+    save_dir = "F:/SLT/data/images"
+    
+    for path in video_paths:
+        save_frame(path, save_dir, gap = 10)
+
+with open("F:/SLT/data/Features.csv","w+",newline='')as fds:
+    wr = csv.writer(fds,dialect='excel')
+    wr.writerow(["image name","m","z1","z2","z3","z4","z5","z6","z7","z8","z9","z10","z11","z12","z13","z14","z15","z16","label"])
+    fds.close()
+
+images = glob("F:/SLT/data/images/*/*/*/*/*.png")
+
+for image in images:
+    
+    my_list1=[]
+    
+    i = os.path.basename(image)
+    my_list1.append(i)
+    
+    secondImage = cv2.imread(image)
+    print(np.mean(secondImage))
+    my_list1.append(np.mean(secondImage))
+    
+    windowsize_r = 10
+    windowsize_c = 10
+    
+    for r in range(0,secondImage.shape[0],windowsize_r):
+        for c in range(0,secondImage.shape[0],windowsize_c+1):
+            window = secondImage[r:r+windowsize_r,c:c+windowsize_c]
+            im = Image.fromarray(window)
+            
+            my_list1.append(np.mean(im))
+            
+    
+    t = os.path.basename(os.path.dirname(image))
+    my_list1.append(t)
+    
+    csv_row = my_list1 
+    with open("F:/SLT/data/Features.csv","a",newline='')as fds:
+        wr = csv.writer(fds,dialect='excel')
+        wr.writerow(csv_row)
+
+import pandas as pd
+# reading two csv files
+data1 = pd.read_csv('F:/SLT/data/features.csv')
+data2 = pd.read_csv('F:/SLT/data/DAiSEE/DAiSEE/Labels/TrainLabels.csv')
+
+print(data1)
+
+
+#mearge two csv files
+
+
+data2['ClipID'] = data2.ClipID.str.replace('.avi','').astype(float)
+
+ds = pd.merge(data1, data2, 
+                   on='ClipID', 
+                  how='left')
+  
+
+print(ds)
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import keras
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM,Dense ,Dropout
+
+#drop the columns
+ds = ds.drop(['image name','Boredom','Confusion','Frustration '],axis=1)
+ds.shape
+ds.head()
+print("\n\n")
+print(ds.info)
+
+#Scale data as X and Y
+training_set_y = pd.get_dummies(ds.Engagement)
+training_set_y = np.array(training_set_y)
+training_set_x = ds.drop('Engagement', axis=1)
+training_set_x=training_set_x.reset_index(drop=True)
+print("\n\n")
+print(training_set_y.shape)
+
+#Feature Scaling 
+sc = MinMaxScaler()
+training_set_x = sc.fit_transform(training_set_x)
+print("\n\n")
+print(training_set_x.shape) 
+
+#shuffle the training_set_y and training_set_x
+indices = np.arange(training_set_x.shape[0])
+np.random.shuffle(indices)
+training_set_x = training_set_x[indices]
+training_set_y = training_set_y[indices] 
+
+#split x and y into training, testing data
+VALIDATION_SPLIT = 0.2
+x_train = []
+x_test = []
+y_train = []
+y_test = []
+
+num_validation_samples = int(VALIDATION_SPLIT*training_set_x.shape[0]) 
+x_train = training_set_x[: -num_validation_samples]
+y_train = training_set_y[: -num_validation_samples]
+x_test = training_set_x[-num_validation_samples: ]
+y_test = training_set_y[-num_validation_samples: ]
+
+x_train , y_train = np.array(x_train), np.array(y_train)
+x_train = np.reshape(x_train, (x_train.shape[0] , x_train.shape[1], 1) )
+
+from keras.models import Sequential
+from keras.layers import LSTM,Dense ,Dropout
+from tensorflow.keras.layers import Conv1D, MaxPooling1D,Convolution2D, Flatten, Dense, Dropout, BatchNormalization, RepeatVector, Bidirectional
+# Fitting RNN to training set using Keras Callbacks. Read Keras callbacks docs for more info.
+from keras.callbacks import ModelCheckpoint, TensorBoard, Callback, EarlyStopping
+
+model = Sequential()
+model.add(Conv1D(filters=64, kernel_size=3, activation='relu',input_shape = (x_train.shape[1],1) ))
+model.add(Conv1D(filters=64, kernel_size=3, activation='relu'))
+model.add(Dropout(0.5))
+model.add(MaxPooling1D(pool_size=2))
+model.add(Flatten())
+model.add(Dense(100, activation='relu'))
+model.add(Dense(50, activation='relu'))
+model.add(Dense(10, activation='relu'))
+model.add(Dense(y_train.shape[1],activation='softmax'))
+
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+history = model.fit(x_train, y_train,epochs=10,batch_size = 10, verbose=1,validation_data=(x_test,y_test))
+
+eval_model = model.evaluate(x_train, y_train)
+eval_model
+
+eval_model = model.evaluate(x_test, y_test)
+eval_model
+
+model.summary()
+
+import matplotlib.pyplot as plt
+
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+epoches = range(1, len(loss)+1)
+plt.plot(epoches, loss, label='Training Loss')
+plt.plot(epoches, val_loss, label='Validation loss')
+plt.title('Training and Validation loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.show();
+
+accuracy = history.history['accuracy']
+val_accuracy = history.history['val_accuracy']
+plt.plot(epoches, accuracy, label='Training accuracy')
+plt.plot(epoches, val_accuracy, label='Validation accuracy')
+plt.title('Training and validation accuracy')
+plt.ylabel('Accuracy')
+plt.xlabel('Epochs')
+plt.legend()
+plt.show();
+
